@@ -52,7 +52,7 @@ extern "C" {
 
 /* #define TRACE */
 /* #define ALLOW_RECNO_OFFSET */
-/* #define ALLOW_KV_FILTER */
+#define ALLOW_KV_FILTER
 
 
 typedef struct {
@@ -144,9 +144,16 @@ typedef int			DualType ;
 #define RECNO_BASE	1
 #endif
 
+#if DB_VERSION_MAJOR == 2 && DB_VERSION_MINOR < 5
+#define flagSet(bitmask)        (flags & (bitmask))  
+#else   
+#define flagSet(bitmask)	((flags & DB_OPFLAGS_MASK) == (bitmask))
+#endif
+
 #ifdef ALLOW_KV_FILTER
-#define ckFilter(arg,type)                              \
+#define ckFilter(arg,type,name)                         \
         if (db->type) {                                 \
+            /* printf("filtering %s\n", name) ; */      \
             if (db->filtering)                          \
                 croak("recursion detected") ;           \
             db->filtering = TRUE ;                      \
@@ -164,7 +171,7 @@ typedef int			DualType ;
             db->filtering = FALSE ;                     \
         }
 #else
-#define ckFilter(type, sv)
+#define ckFilter(type, sv, name)
 #endif
 
 #define ERR_BUFF "BerkeleyDB::Error" 
@@ -216,19 +223,20 @@ typedef int			DualType ;
 #define OutputValue(arg, name)                                  \
         { if (RETVAL == 0) {                                    \
               my_sv_setpvn(arg, name.data, name.size) ;         \
-              ckFilter(arg, readValue) ;                        \
+              ckFilter(arg, readValue,"readValue") ;            \
           }                                                     \
         }
 
 #define OutputValue_B(arg, name)                                  \
         { if (RETVAL == 0) {                                    \
-		if (db->type == DB_BTREE && (flags & DB_GET_RECNO)){\
+		if (db->type == DB_BTREE && 			\
+			flagSet(DB_GET_RECNO)){			\
                     sv_setiv(arg, (I32)(*(I32*)name.data) - RECNO_BASE); \
                 }                                               \
                 else {                                          \
                     my_sv_setpvn(arg, name.data, name.size) ;   \
                 }                                               \
-                ckFilter(arg, readValue) ;                      \
+                ckFilter(arg, readValue, "readValue");          \
           }                                                     \
         }
 
@@ -240,7 +248,7 @@ typedef int			DualType ;
                 }                                               \
                 else                                            \
                     sv_setiv(arg, (I32)*(I32*)name.data - RECNO_BASE);   \
-                ckFilter(arg, readKey) ;                       \
+                ckFilter(arg, readKey, "readKey") ;            \
           }                                                     \
         }
 
@@ -248,18 +256,18 @@ typedef int			DualType ;
         { if (RETVAL == 0) 					\
           {                                                     \
                 if (db->type == DB_RECNO || 			\
-		(db->type == DB_BTREE && 			\
-			(flags & DB_GET_RECNO))){		\
+			(db->type == DB_BTREE && 		\
+			    flagSet(DB_GET_RECNO))){		\
                     sv_setiv(arg, (I32)(*(I32*)name.data) - RECNO_BASE); \
                 }                                               \
                 else {                                          \
                     my_sv_setpvn(arg, name.data, name.size);    \
                 }                                               \
-                ckFilter(arg, readKey) ;                       \
+                ckFilter(arg, readKey, "readKey") ;            \
           }                                                     \
         }
 
-#define SetPartial(data) 					\
+#define SetPartial(data,db) 					\
 	data.flags = db->partial ;				\
 	data.dlen  = db->dlen ;					\
 	data.doff  = db->doff ;	
@@ -357,7 +365,7 @@ I32      value ;
     return value ;
 }
 
-#else
+#else /* ! 0 */
 
 #if 0
 #ifdef ALLOW_RECNO_OFFSET
@@ -374,12 +382,12 @@ I32      value ;
 }
 
 #else
-#endif
+#endif /* ALLOW_RECNO_OFFSET */
 #endif /* 0 */
 
 #define GetRecnoKey(db, value) ((value) + RECNO_BASE )
 
-#endif
+#endif /* 0 */
 
 static SV *
 GetInternalObject(sv)
@@ -1014,6 +1022,12 @@ int arg;
 #else
 	    goto not_there;
 #endif
+	if (strEQ(name, "DB_GET_BOTH"))
+#ifdef DB_GET_BOTH
+	    return DB_GET_BOTH;
+#else
+	    goto not_there;
+#endif
 	if (strEQ(name, "DB_GET_RECNO"))
 #ifdef DB_GET_RECNO
 	    return DB_GET_RECNO;
@@ -1280,6 +1294,12 @@ int arg;
 #else
 	    goto not_there;
 #endif
+	if (strEQ(name, "DB_NEXT_DUP"))
+#ifdef DB_NEXT_DUP
+	    return DB_NEXT_DUP;
+#else
+	    goto not_there;
+#endif
 	if (strEQ(name, "DB_NOMMAP"))
 #ifdef DB_NOMMAP
 	    return DB_NOMMAP;
@@ -1405,6 +1425,18 @@ int arg;
 	if (strEQ(name, "DB_RENUMBER"))
 #ifdef DB_RENUMBER
 	    return DB_RENUMBER;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "DB_RUNRECOVERY"))
+#ifdef DB_RUNRECOVERY
+	    return DB_RUNRECOVERY;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "DB_RMW"))
+#ifdef DB_RMW
+	    return DB_RMW;
 #else
 	    goto not_there;
 #endif
@@ -2122,11 +2154,8 @@ db_stat(db, flags=0)
 		hv_store_iv(RETVAL, "bt_dup_pg", stat->bt_dup_pg);
 		hv_store_iv(RETVAL, "bt_over_pg", stat->bt_over_pg);
 		hv_store_iv(RETVAL, "bt_free", stat->bt_free);
+#if DB_VERSION_MAJOR == 2 && DB_VERSION_MINOR < 5
 		hv_store_iv(RETVAL, "bt_freed", stat->bt_freed);
-		hv_store_iv(RETVAL, "bt_int_pgfree", stat->bt_int_pgfree);
-		hv_store_iv(RETVAL, "bt_leaf_pgfree", stat->bt_leaf_pgfree);
-		hv_store_iv(RETVAL, "bt_dup_pgfree", stat->bt_dup_pgfree);
-		hv_store_iv(RETVAL, "bt_over_pgfree", stat->bt_over_pgfree);
 		hv_store_iv(RETVAL, "bt_pfxsaved", stat->bt_pfxsaved);
 		hv_store_iv(RETVAL, "bt_split", stat->bt_split);
 		hv_store_iv(RETVAL, "bt_rootsplit", stat->bt_rootsplit);
@@ -2136,6 +2165,13 @@ db_stat(db, flags=0)
 		hv_store_iv(RETVAL, "bt_get", stat->bt_get);
 		hv_store_iv(RETVAL, "bt_cache_hit", stat->bt_cache_hit);
 		hv_store_iv(RETVAL, "bt_cache_miss", stat->bt_cache_miss);
+#endif
+		hv_store_iv(RETVAL, "bt_int_pgfree", stat->bt_int_pgfree);
+		hv_store_iv(RETVAL, "bt_leaf_pgfree", stat->bt_leaf_pgfree);
+		hv_store_iv(RETVAL, "bt_dup_pgfree", stat->bt_dup_pgfree);
+		hv_store_iv(RETVAL, "bt_over_pgfree", stat->bt_over_pgfree);
+		hv_store_iv(RETVAL, "bt_magic", stat->bt_magic);
+		hv_store_iv(RETVAL, "bt_version", stat->bt_version);
 		safefree(stat) ;
 	    }
 	}
@@ -2196,7 +2232,7 @@ _db_open_recno(self, ref)
 #ifdef ALLOW_RECNO_OFFSET
 	    SetValue_iv(db->array_base, "ArrayBase") ;
 	    db->array_base = (db->array_base == 0 ? 1 : 0) ;
-#endif
+#endif /* ALLOW_RECNO_OFFSET */
 	    
 	    RETVAL = my_db_open(db, ref, ref_dbenv, dbenv, file, DB_RECNO, flags, mode, &info) ;
 	}
@@ -2276,7 +2312,7 @@ db_cursor(db)
 	      RETVAL->active  = TRUE ;
 #ifdef ALLOW_RECNO_OFFSET
 	      RETVAL->array_base  = db->array_base ;
-#endif
+#endif /* ALLOW_RECNO_OFFSET */
 #ifdef ALLOW_KV_FILTER
 	      RETVAL->filtering   = FALSE ;
 	      RETVAL->readKey     = db->readKey ;
@@ -2302,7 +2338,7 @@ ArrayOffset(db)
 	    RETVAL = db->array_base ? 0 : 1 ;
 #else
 	    RETVAL = 0 ;
-#endif
+#endif /* ALLOW_RECNO_OFFSET */
 	OUTPUT: 
 	    RETVAL
 
@@ -2313,6 +2349,20 @@ type(db)
 	    ckActive_Database(db->active) ;
 	CODE:
 	    RETVAL = db->type ;
+	OUTPUT: 
+	    RETVAL
+
+int
+byteswapped(db)
+        BerkeleyDB::Common 	db
+	INIT:
+	    ckActive_Database(db->active) ;
+	CODE:
+#if DB_VERSION_MAJOR == 2 && DB_VERSION_MINOR < 5
+	    croak("byteswapped needs Berkeley DB 2.5 or later") ;
+#else
+	    RETVAL = db->dbp->byteswapped ;
+#endif
 	OUTPUT: 
 	    RETVAL
 
@@ -2440,9 +2490,9 @@ db_get(db, key, data, flags=0)
 	INIT:
 	  ckActive_Database(db->active) ;
 	  CurrentDB = db ;
-	  SetPartial(data) ;
+	  SetPartial(data,db) ;
 	OUTPUT:
-	  key	if (flags & DB_SET_RECNO) OutputValue(ST(1), key) ;
+	  key	if (flagSet(DB_SET_RECNO)) OutputValue(ST(1), key) ;
 	  data  
 
 #define db_put(db,key,data,flag)	\
@@ -2456,9 +2506,9 @@ db_put(db, key, data, flags=0)
 	INIT:
 	  ckActive_Database(db->active) ;
 	  CurrentDB = db ;
-	  /* SetPartial(data) ; */
+	  /* SetPartial(data,db) ; */
 	OUTPUT:
-	  key	if (flags & DB_APPEND) OutputKey(ST(1), key) ;
+	  key	if (flagSet(DB_APPEND)) OutputKey(ST(1), key) ;
 
 #define db_fd(d, x)	(db->Status = (db->dbp->fd)(db->dbp, &x))
 DualType
@@ -2555,7 +2605,7 @@ cu_c_get(db, key, data, flags=0)
 	INIT:
 	  CurrentDB = db ;
 	  ckActive_Cursor(db->active) ;
-	  SetPartial(data) ;
+	  SetPartial(data,db) ;
 	  /* key		if (! (flags & DB_GET_RECNO)) OutputKey_B(ST(1), key) ; */
 	OUTPUT:
 	  RETVAL
@@ -2573,7 +2623,7 @@ cu_c_put(db, key, data, flags=0)
 	INIT:
 	  CurrentDB = db ;
 	  ckActive_Cursor(db->active) ;
-	  /* SetPartial(data) ; */
+	  /* SetPartial(data,db) ; */
 	OUTPUT:
 	  RETVAL
 

@@ -33,6 +33,7 @@ BerkeleyDB - Perl extension for Berkeley DB version 2
   $hash_ref = $db->db_stat() ;
   $type = $db->type() ;
   $type = $db->status() ;
+  $type = $db->byteswapped() ;
 
   ($flag, $old_offset, $old_length) = $db->partial_set($offset, $length) ;
   ($flag, $old_offset, $old_length) = $db->partial_clear() ;
