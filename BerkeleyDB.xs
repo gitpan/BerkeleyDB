@@ -2,7 +2,7 @@
  
  BerkeleyDB.xs -- Perl 5 interface to Berkeley DB version 2
  
- written by Paul Marquess (pmarquess@bfsec.bt.co.uk)
+ written by Paul Marquess <Paul.Marquess@btinternet.com>
 
  SCCS: %I%, %G%  
 
@@ -25,6 +25,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#define PERL_POLLUTE
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -311,7 +312,6 @@ static char *   db_err_str[] = {
 	} ;
 
 
-
 static I32
 GetArrayLength(db)
 BerkeleyDB db ;
@@ -323,7 +323,11 @@ BerkeleyDB db ;
 
     key.flags = 0 ;
     value.flags = 0 ;
+#if DB_VERSION_MAJOR == 2 && DB_VERSION_MINOR < 6
     if ( ((db->dbp)->cursor)(db->dbp, db->txn, &cursor) == 0 )
+#else
+    if ( ((db->dbp)->cursor)(db->dbp, db->txn, &cursor, 0) == 0 )
+#endif
     {
         RETVAL = cursor->c_get(cursor, &key, &value, DB_LAST) ;
         if (RETVAL == 0)
@@ -1063,6 +1067,12 @@ int arg;
 	if (strEQ(name, "DB_INCOMPLETE"))
 #ifdef DB_INCOMPLETE
 	    return DB_INCOMPLETE;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "DB_INIT_CDB"))
+#ifdef DB_INIT_CDB
+	    return DB_INIT_CDB;
 #else
 	    goto not_there;
 #endif
@@ -2286,10 +2296,15 @@ dab_DESTROY(db)
           Safefree(db) ;
 	  Trace(("End of BerkeleyDB::Common::DESTROY \n")) ;
 
-#define db_cursor(db, txn, cur)  ((db->dbp)->cursor)(db->dbp, txn, cur)
+#if DB_VERSION_MAJOR == 2 && DB_VERSION_MINOR < 6
+#define db_cursor(db, txn, cur,flags)  ((db->dbp)->cursor)(db->dbp, txn, cur)
+#else
+#define db_cursor(db, txn, cur,flags)  ((db->dbp)->cursor)(db->dbp, txn, cur,flags)
+#endif
 BerkeleyDB::Cursor
-db_cursor(db)
+db_cursor(db, flags=0)
         BerkeleyDB::Common 	db
+	u_int32_t		flags 
         BerkeleyDB::Cursor 	RETVAL = NULL ;
 	INIT:
 	    ckActive_Database(db->active) ;
@@ -2297,7 +2312,7 @@ db_cursor(db)
 	{
 	  DBC *		cursor ;
 	  CurrentDB = db ;
-	  if ((db->Status = db_cursor(db, db->txn, &cursor)) == 0){
+	  if ((db->Status = db_cursor(db, db->txn, &cursor, flags)) == 0){
 	      ZMALLOC(RETVAL, BerkeleyDB__Cursor_type) ;
 	      RETVAL->cursor  = cursor ;
 	      RETVAL->dbp     = db->dbp ;
@@ -2806,7 +2821,7 @@ FIRSTKEY(db)
 	    key.flags = value.flags = 0 ;
 	    /* If necessary create a cursor for FIRSTKEY/NEXTKEY use */
 	    if (!db->cursor &&
-		(db->Status = db_cursor(db, db->txn, &cursor)) == 0 )
+		(db->Status = db_cursor(db, db->txn, &cursor, 0)) == 0 )
 	            db->cursor  = cursor ;
 	    
 	    if (db->cursor)

@@ -1,8 +1,8 @@
                                    BerkeleyDB
 
-                                  Version 0.05
+                                  Version 0.06
 
-                                  9th  Nov 1998 
+                                 19th  Dec 1998 
 
 	Copyright (c) 1997/8 Paul Marquess. All rights reserved. This
 	program is free software; you can redistribute it and/or modify
@@ -167,5 +167,5 @@ CHANGES
 
 See the Changes file.
  
-Paul Marquess <pmarquess@bfsec.bt.co.uk>
+Paul Marquess <Paul.Marquess@btinternet.com>
 

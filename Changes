@@ -23,3 +23,6 @@ Revision history for Perl extension BerkeleyDB.
 	when using HP-UX.
 	Minor modifications to get the module to build with DB 2.5.x
 
+0.06  19 December 1998
+	Minor modifications to get the module to build with DB 2.6.x
+	Added support for DB 2.6.x's  Concurrent Access Method 

@@ -596,13 +596,13 @@ umask(0) ;
     ok 164, my $db = new BerkeleyDB::Btree -Filename => $Dfile, 
 				     -Flags    => DB_CREATE,
 				 	-Minkey	=>3 ,
-					-Pagesize	=> 5 * 1024,
+					-Pagesize	=> 2 **12 
 					;
 
     my $ref = $db->db_stat() ; 
     ok 165, $ref->{'bt_nrecs'} == 0;
     ok 166, $ref->{'bt_minkey'} == 3;
-    ok 167, $ref->{'bt_pagesize'} == 5 * 1024;
+    ok 167, $ref->{'bt_pagesize'} == 2 ** 12;
 
     # create some data
     my %data =  (
